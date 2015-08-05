@@ -1,56 +1,47 @@
-from __future__ import print_function
+"""
+Remove successive/adjacent duplicates in libvirt Virtual Machine states
+"""
 
+from __future__ import print_function
 import sys
 import json
-
 from pyspark import SparkContext, SparkConf
 
+## ad-hoc
+#referTimestamp = '2015-06-16 09:42:03' # timestamp of state should later than that of operation
 
-
-def state_diff(VMStates):
+def unique(VMStates):
         uniqVMStates = []
-#       print 'daertsrfa daertesryfrgare'
         referState = VMStates[0]
-#       print referState
-#       print '--------------------diff-----------------------'
-        for state in VMStates[1:]:
+        for state in VMStates[1:]: # we must record the first occurance of a new state, not the last. (similar to the upper-jump)
              for key in referState:
                      if key != "timestamp":
                              if referState[key] != state[key]:
                                      uniqVMStates.append(referState)
-#                                    print referState[key], state[key]
                                      referState = state
                                      break
         uniqVMStates.append(referState)
-#       print referState
         return uniqVMStates
 
 
 
-
 if __name__ == "__main__":
-
-    print(sys.argv)
-
     if len(sys.argv) != 3:
-        print("Usage: libvirt_state_spark <pathIn> <pathOut>")
+        print("Usage: libvirt_state_spark_opt.py <pathIn> <pathOut>")
         exit(-1)
 
     conf = SparkConf()
     conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    #conf.set("spark.executor.extraJavaOptions", "-Xms=2g -Xmx=2g")
-#    conf.set("spark.driver.memory", "4g")
-#    conf.set("spark.executor.memory", "2g")
+    conf.set("spark.speculation", "true")
     conf.setAppName("PythonLibvirtState")
     sc = SparkContext(conf=conf)
 
     pathIn = sys.argv[1]
     pathOut = sys.argv[2] 
-    numPartitions = 256 # we have 32 worker node with 8 cores each
 
     print('pathIn = %s, pathOut = %s' % (pathIn, pathOut))
 
-    libvirtStates = sc.textFile(pathIn, numPartitions)
+    libvirtStates = sc.textFile(pathIn)
     libvirtParsedRDD = (libvirtStates
 			.map(lambda line: json.loads(line.strip(',\n'))))
 #            		.cache())
@@ -61,26 +52,18 @@ if __name__ == "__main__":
 #            		.reduceByKey(lambda p, q: p + q))
 
     libvirtReduceRDD = (libvirtParsedRDD
+#			.filter(lambda vmState: vmState['timestamp'] >= referTimestamp) # ad-hoc
 			.map(lambda vmState: (vmState["uuid"], vmState))
 			.groupByKey())
 
     libvirtReduceSortedRDD = (libvirtReduceRDD
 			      .mapValues(lambda vms: sorted(vms, key = (lambda vm: vm["timestamp"]), reverse = False)))
-#			      .cache()	
 
-#    libvirtReduceSortedRDD = (libvirtReduceRDD
-#			      .map(lambda (uuid, vms): (uuid, sorted(vms, key = (lambda vm: vm["timestamp"]), reverse = False))))
-##                	      .cache())
 
     libvirtReduceSortedDiffRDD = (libvirtReduceSortedRDD
-				  .mapValues(lambda vms: state_diff(vms)))
-#			          .persist()
-
-#    libvirtReduceSortedDiffRDD = (libvirtReduceSortedRDD
-#                                  .map(lambda (uuid, vms): (uuid, state_diff(vms))))
-##                                  .cache())
-
+				  .mapValues(lambda vms: unique(vms)))
 
 #    libvirtReduceSortedDiffRDD.map(lambda x: json.dumps(x)).saveAsTextFile(pathOut) # dump to json format, then save as textfile
     libvirtReduceSortedDiffRDD.saveAsTextFile(pathOut) 
+
     sc.stop()
