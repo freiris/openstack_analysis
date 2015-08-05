@@ -16,6 +16,7 @@ def hasIfaceId(records):
 
 
 if __name__ == "__main__":
+	print(sys.argv)
     	if len(sys.argv) != 3:
         	print("Usage: ovs_state_iface_id.py <pathIn> <pathOut>")
         	exit(-1)

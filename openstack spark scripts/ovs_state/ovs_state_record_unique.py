@@ -71,6 +71,7 @@ def parse(data):
 
 
 if __name__ == "__main__":
+	print(sys.argv)
     	if len(sys.argv) != 3:
         	print("Usage: ovs_state_record_urecord_unique.py <pathIn> <pathOut>")
         	exit(-1)

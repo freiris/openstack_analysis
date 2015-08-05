@@ -63,6 +63,7 @@ def differ(table1, table2):
 
 
 if __name__ == "__main__":
+	print(sys.argv)
     	if len(sys.argv) != 3:
         	print("Usage: ovs_state_snapshot_unique_opt.py <pathIn> <pathOut>")
         	exit(-1)
