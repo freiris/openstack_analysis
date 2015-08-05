@@ -3,7 +3,7 @@
 Extract records with uuid from tracedb within timestamp [begintime, endtime],
 similar to "select into file" procedure. Moreover, compact into single line 
 
-Useage: python extract_record.py --host 10.1.0.76 --db tracedb --begintime '2015-05-31 05:47:47' --endtime '2015-05-31 08:36:52' 
+Useage: python extract_compact_record_timezone.py --host 10.1.0.76 --db tracedb --begintime '2015-05-31 05:47:47' --endtime '2015-05-31 08:36:52' 
  
 """
 import MySQLdb
@@ -30,8 +30,8 @@ def extract_by_timestamp_uuid(host, port, db, user, password, begintime, endtime
 	uuid = '.*[0-9a-f]{8}-?[0-9a-f]{4}-?4[0-9a-f]{3}-?[89ab][0-9a-f]{3}-?[0-9a-f]{12}.*'
 	fromtz = pytz.timezone(fromzone)
 	totz = pytz.timezone(tozone)
-	fmt = "%Y-%m-%d %H:%M:%S"
-	#fmt = "%Y-%m-%d %H:%M:%S.%3d"
+#	fmt = "%Y-%m-%d %H:%M:%S"
+	fmt = "%Y-%m-%d %H:%M:%S.%3d"
 
 	for item in tables:
 		table = item[0]
