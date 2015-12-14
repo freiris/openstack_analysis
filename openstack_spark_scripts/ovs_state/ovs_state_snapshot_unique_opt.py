@@ -9,6 +9,12 @@ import sys
 import json
 from pyspark import SparkContext, SparkConf
 
+
+## ad-hoc
+referTimestamp = '2015-11-30 02:00:00' # timestamp of state should later than that of operation
+
+
+
 '''
 def unique(ovsStates):
     uniqovsStates=[]
@@ -24,7 +30,7 @@ def unique(ovsStates):
     return uniqovsStates
 '''
 
-def iterUnique(ovsStates):
+def iterUnique(ovsStates): # ovsStates is an iterator, not a list which has no next() method
 	try:
 		referState = ovsStates.next() # without assuming non-empty
 	except:
@@ -69,7 +75,7 @@ if __name__ == "__main__":
         	exit(-1)
 
     	conf = SparkConf()
-    	conf.setAppName("PythonOvsState")
+    	conf.setAppName("PythonOvsStateSnapshotUnique")
 	conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         conf.set("spark.speculation", "true")
     	sc = SparkContext(conf=conf)
@@ -80,19 +86,24 @@ if __name__ == "__main__":
     	print('pathIn = %s, pathOut = %s' % (pathIn, pathOut))
 
     	ovsRDD = sc.textFile(pathIn) # the input is the ovsdb snapshots on a physical machine which are inherently ordered by time.
-    	ovsParsedRDD = ovsRDD.map(lambda line: json.loads(line.strip(',\n')))
-	ovsUniqRDD = (ovsParsedRDD
+    
+	ovsParsedRDD = (ovsRDD
+			.map(lambda line: json.loads(line.strip(',\n')))
+			.filter(lambda state: state['timestamp'] > referTimestamp) # ad-hoc
+			)
+
+	ovsUniqPartRDD = (ovsParsedRDD
 			.mapPartitions(iterUnique)
-			.coalesce(1)
+			.cache() # usually a small intermediate result, i.e 50G => 100M  
+			)
+
+	ovsUniqPartRDD.count() # IMPORTANT:flush the previous transformations with a global action, which keeps the parallelism and scans the whole input.
+
+	ovsUniqRDD = (ovsUniqPartRDD 
+			.coalesce(1) # seems keeping the ordering of partitions. only 1 task to run => no parallelism 
 			.mapPartitions(iterUnique)
 			)
 
 	ovsUniqRDD.saveAsTextFile(pathOut)
-#	ovsReduceRDD = (ovsParsedRDD
-#		    	.map(lambda ovsState: (ovsState["IP"],[ovsState]))
-#		    	.reduceByKey(lambda p, q: p + q)
-#		    	)
-#    	ovsReduceUniqueRDD = ovsReduceRDD.mapValues(lambda ovsStates: unique(ovsStates))
-#    	ovsReduceUniqueRDD.saveAsTextFile(pathOut)
-    
-    	sc.stop()
+    	
+	sc.stop()
