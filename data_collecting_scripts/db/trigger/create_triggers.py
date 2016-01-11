@@ -3,6 +3,8 @@
 Create a trace table for the database in default tracedb.
 Create an after_[insert, update, delete] trigger for each table, and a disable_switch for each trigger (limited in the same session). 
 Trace the NEW.* for insert and update, the OLD.* for delete.
+We keep the NULL value, and use semicolon(;) as delimiter.
+
 NOTE: 
 trigger_name = table + '_' + trigger_time + '_' + trigger_event + '_trigger', i.e. quotas_AFTER_UPDATE_trigger
 trigger_disable = db + '_' + table + '_' + trigger_time + '_' + trigger_event + '_disable', i.e. nova_quotas_AFTER_UPDATE_disable
@@ -12,8 +14,8 @@ from optparse import OptionParser
 
 
 __AUTHOR__ = 'shuhao+yong'
-__VERSION__ = '1.1'
-__DATE__ = '2015/03/08'
+__VERSION__ = '1.2'
+__DATE__ = '2015/01/11'
 
 
 
@@ -56,6 +58,9 @@ def _run(host, port, db, user, password, tracedb):
 				cols = cols_dict['OLD.'] # trace the OLD value for DELETE operation. Required to determine the death of a row. 
 			else:
 				cols = cols_dict['NEW.']
+			# keep 'NULL' value in the field, don't ignore when concat_ws()
+			cols = ', '.join(map(lambda f: "IFNULL(%s, 'NULL')"%f, cols.split(', '))) # if the value is null, set as empty string
+			
 
 			trigger_name = table + '_' + trigger_time + '_' + trigger_event + '_trigger'# unique within database is OK 
 			trigger_disable = db + '_' + table + '_' + trigger_time + '_' + trigger_event + '_disable' # global variable 
@@ -68,13 +73,14 @@ def _run(host, port, db, user, password, tracedb):
 					BEGIN \
 						IF @%(trigger_disable)s IS NULL THEN \
 							INSERT INTO `%(tracedb)s`.`%(trace_table)s` \
-							SELECT NULL, NOW(), '%(trigger_event)s', '%(table)s', CONCAT_WS(',', %(cols)s)\
+							SELECT NULL, NOW(), '%(trigger_event)s', '%(db)s.%(table)s', CONCAT_WS(';', %(cols)s)\
 							FROM `%(table)s`\
 							LIMIT  1;\
 						END IF;\
 					END;"\
 					%{'trigger_name': trigger_name, 'trigger_time': trigger_time, 'trigger_event': trigger_event,\
-					'trigger_disable': trigger_disable,'table': table, 'tracedb': tracedb, 'trace_table': trace_table, 'cols': cols} 
+					'trigger_disable': trigger_disable, 'db': db, 'table': table, 'tracedb': tracedb, 'trace_table': trace_table,\
+					'cols': cols} 
 					 #we avoid WHERE clause with LIMIT 1
 			print create_trigger
 			cursor.execute(create_trigger)
